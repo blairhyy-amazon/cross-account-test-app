@@ -23,7 +23,7 @@ val javaVersionRefactored = JavaVersion.toVersion(javaVersion)
 plugins {
   java
   application
-  id("org.springframework.boot")
+  id("org.springframework.boot") version "3.4.0"
   id("io.spring.dependency-management") version "1.1.0"
   id("com.google.cloud.tools.jib")
   id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
@@ -48,6 +48,9 @@ dependencies {
   implementation("com.mysql:mysql-connector-j:8.4.0")
   implementation ("org.apache.httpcomponents:httpclient:4.5.13")
   implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
+  implementation("com.amazonaws:aws-java-sdk-sqs:1.12.400")
+  implementation("com.amazonaws:aws-java-sdk-core:1.12.400")
+  implementation("software.amazon.awssdk:sqs:2.20.2")
   testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.20")
 }
 
@@ -57,7 +60,7 @@ jib {
   }
   // Replace this value with the ECR Image URI
   to {
-    image = "{{ECR_IMAGE_URI}}"
+    image = "571600868874.dkr.ecr.us-west-1.amazonaws.com/adot_java_testing_app_v2:latest"
   }
   container {
     mainClass = "com.amazon.sampleapp.FrontendService"

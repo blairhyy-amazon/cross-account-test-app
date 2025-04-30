@@ -17,10 +17,17 @@ package com.amazon.sampleapp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import java.util.Collections;
 
 @SpringBootApplication
 public class RemoteService {
   public static void main(String[] args) {
-    SpringApplication.run(RemoteService.class, args);
+    SpringApplication app = new SpringApplication(RemoteService.class);
+
+    // Set the server port to 8081
+    app.setDefaultProperties(Collections.singletonMap("server.port", "8083"));
+
+    // Run the application
+    app.run(args);
   }
 }

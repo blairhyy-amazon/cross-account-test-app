@@ -21,6 +21,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import software.amazon.awssdk.services.s3.S3Client;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import java.util.Collections;
 
 @SpringBootApplication
 public class FrontendService {
@@ -35,7 +40,22 @@ public class FrontendService {
     return S3Client.builder().build();
   }
 
+  @Bean
+  public AmazonSQS amazonSQS() {
+    // Automatically uses the IAM role associated with the ECS task
+    return AmazonSQSClientBuilder.standard()
+      .build();
+  }
+
+  @Bean
+  public SqsClient sqsClient() {
+    // Automatically uses the IAM role associated with the ECS task
+    return SqsClient.builder().build();
+  }
+
   public static void main(String[] args) {
-    SpringApplication.run(FrontendService.class, args);
+    SpringApplication app = new SpringApplication(FrontendService.class);
+    app.setDefaultProperties(Collections.singletonMap("server.port", "8082"));
+    app.run(args);
   }
 }

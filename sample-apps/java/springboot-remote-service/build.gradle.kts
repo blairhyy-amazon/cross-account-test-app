@@ -23,7 +23,7 @@ val javaVersionRefactored = JavaVersion.toVersion(javaVersion)
 plugins {
   java
   application
-  id("org.springframework.boot")
+  id("org.springframework.boot") version "3.4.0"
   id("io.spring.dependency-management") version "1.1.0"
   id("com.google.cloud.tools.jib")
   id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
@@ -52,12 +52,12 @@ jib {
   }
   // Replace this value with the ECR Image URI
   to {
-    image = "{{ECR_IMAGE_URI}}"
+    image = "571600868874.dkr.ecr.us-east-2.amazonaws.com/adot_java_remote_testing_app_v2:latest"
   }
   container {
     mainClass = "com.amazon.sampleapp.RemoteService"
     jvmFlags = listOf("-XX:+UseG1GC")
-    ports = listOf("8080")
+    ports = listOf("8081")
   }
 }
 

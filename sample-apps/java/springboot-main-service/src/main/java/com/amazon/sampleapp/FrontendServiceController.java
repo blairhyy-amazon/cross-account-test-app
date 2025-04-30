@@ -16,6 +16,10 @@
 package com.amazon.sampleapp;
 
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributeKey;
 import java.net.URI;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -39,20 +43,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.model.SendMessageResult;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 @Controller
 public class FrontendServiceController {
   private static final Logger logger = LoggerFactory.getLogger(FrontendServiceController.class);
   private final CloseableHttpClient httpClient;
   private final S3Client s3;
+  private final AmazonSQS amazonSQS;
+  private final SqsClient sqsClient;
   private AtomicBoolean shouldSendLocalRootClientCall = new AtomicBoolean(false);
 
   @Bean
-  private void runLocalRootClientCallRecurringService() { // run the service
+  private ScheduledExecutorService runLocalRootClientCallRecurringService() { // run the service
     ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 
     Runnable runnableTask =
@@ -72,19 +85,71 @@ public class FrontendServiceController {
             };
     // Run with initial 0.1s delay, every 1 second
     executorService.scheduleAtFixedRate(runnableTask, 100, 1000, TimeUnit.MILLISECONDS);
+    return executorService;
   }
 
   @Autowired
-  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3) {
+  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3, AmazonSQS amazonSQS, SqsClient sqsClient) {
     this.httpClient = httpClient;
     this.s3 = s3;
+    this.amazonSQS = amazonSQS;
+    this.sqsClient = sqsClient;
   }
+
 
   @GetMapping("/")
   @ResponseBody
   public String healthcheck() {
     return "healthcheck";
   }
+
+  @GetMapping("/get-sqs")
+  @ResponseBody
+  public String getMessage(){
+    Context currentContext = Context.current();
+    Span currentSpan = Span.fromContext(currentContext);
+
+    currentSpan.addEvent("metric",Attributes.of(
+                    AttributeKey.stringKey("metric.name"), "RequestSize",
+                    AttributeKey.stringKey("metric.unit"), "Bytes",
+                    AttributeKey.stringKey("metric.value"), String.valueOf(100)
+                ));
+
+    try {
+      ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
+        .queueUrl(System.getenv("SQS_QUEUE_URL"))
+        .maxNumberOfMessages(1)  // Number of messages to retrieve (max: 10)
+        .waitTimeSeconds(10)  // Long polling (wait up to 20 seconds for messages)
+        .build();
+
+      ReceiveMessageResponse receiveMessageResponse = sqsClient.receiveMessage(receiveMessageRequest);
+      logger.info("Sqs message received!");
+    } catch (Exception e) {
+      logger.error("Sqs message receiver failed!");
+    }
+    return getXrayTraceId();
+  }
+
+  @PostMapping("/send-sqs")
+  @ResponseBody
+  public String sendMessage(@RequestParam String message) {
+    try {
+      // Create a SendMessageRequest to send the message to the queue
+      SendMessageRequest sendMessageRequest = new SendMessageRequest()
+        .withQueueUrl(System.getenv("SQS_QUEUE_URL"))
+        .withMessageBody(message);
+
+      // Send the message to the SQS queue
+      SendMessageResult result = amazonSQS.sendMessage(sendMessageRequest);
+      if (result != null) {
+        logger.info("Sqs message sent!");
+      }
+    } catch (Exception e) {
+      logger.error("Sqs message failed!");
+    }
+    return getXrayTraceId();
+  }
+
 
   // test aws calls instrumentation
   @GetMapping("/aws-sdk-call")
@@ -123,7 +188,7 @@ public class FrontendServiceController {
   @ResponseBody
   public String downstreamService(@RequestParam("ip") String ip) {
     ip = ip.replace("/", "");
-    HttpGet request = new HttpGet("http://" + ip + ":8080/healthcheck");
+    HttpGet request = new HttpGet("http://" + ip + ":8083/healthcheck");
     try (CloseableHttpResponse response = httpClient.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       logger.info("Remote service call status code: " + statusCode);
@@ -155,7 +220,7 @@ public class FrontendServiceController {
               System.getenv("RDS_MYSQL_CLUSTER_USERNAME"),
               rdsMySQLClusterPassword);
       Statement statement = connection.createStatement();
-      statement.executeQuery("SELECT * FROM tables LIMIT 1;");
+      statement.executeQuery("SELECT * FROM `tables` LIMIT 1;");
     } catch (SQLException e) {
       logger.error("Could not complete SQL request: {}", e.getMessage());
       throw new RuntimeException(e);
