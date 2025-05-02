@@ -23,6 +23,8 @@ import org.springframework.context.annotation.Bean;
 import software.amazon.awssdk.services.s3.S3Client;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sns.AmazonSNS;
+import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import java.util.Collections;
@@ -51,6 +53,13 @@ public class FrontendService {
   public SqsClient sqsClient() {
     // Automatically uses the IAM role associated with the ECS task
     return SqsClient.builder().build();
+  }
+
+  @Bean
+  public AmazonSNS amazonSNS() {
+    //  v1
+    return AmazonSNSClientBuilder.standard()
+            .build();
   }
 
   public static void main(String[] args) {

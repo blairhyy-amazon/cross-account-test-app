@@ -16,7 +16,7 @@
 val javaVersion = if (project.hasProperty("javaVersion")) {
   project.property("javaVersion").toString()
 } else {
-  "11"
+  "21"
 }
 val javaVersionRefactored = JavaVersion.toVersion(javaVersion)
 
@@ -51,7 +51,9 @@ dependencies {
   implementation("com.amazonaws:aws-java-sdk-sqs:1.12.400")
   implementation("com.amazonaws:aws-java-sdk-core:1.12.400")
   implementation("software.amazon.awssdk:sqs:2.20.2")
+  implementation("com.amazonaws:aws-java-sdk-sns:1.12.261")
   testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.20")
+  implementation("com.amazonaws:aws-java-sdk-sts:1.12.529")
 }
 
 jib {

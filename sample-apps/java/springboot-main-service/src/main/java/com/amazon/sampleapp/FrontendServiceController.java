@@ -52,6 +52,18 @@ import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import com.amazonaws.services.sns.AmazonSNS;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.auth.BasicSessionCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.services.sns.AmazonSNSClientBuilder;
+import com.amazonaws.services.sns.model.PublishRequest;
+import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
+import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.amazonaws.services.securitytoken.model.Credentials;
+import com.amazonaws.services.sns.model.PublishResult;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
@@ -61,6 +73,7 @@ public class FrontendServiceController {
   private final CloseableHttpClient httpClient;
   private final S3Client s3;
   private final AmazonSQS amazonSQS;
+  private final AmazonSNS amazonSNS;
   private final SqsClient sqsClient;
   private AtomicBoolean shouldSendLocalRootClientCall = new AtomicBoolean(false);
 
@@ -89,11 +102,12 @@ public class FrontendServiceController {
   }
 
   @Autowired
-  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3, AmazonSQS amazonSQS, SqsClient sqsClient) {
+  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3, AmazonSQS amazonSQS, SqsClient sqsClient, AmazonSNS amazonSNS) {
     this.httpClient = httpClient;
     this.s3 = s3;
     this.amazonSQS = amazonSQS;
     this.sqsClient = sqsClient;
+    this.amazonSNS = amazonSNS;
   }
 
 
@@ -101,6 +115,52 @@ public class FrontendServiceController {
   @ResponseBody
   public String healthcheck() {
     return "healthcheck";
+  }
+
+  // Add new endpoint for SNS publishing
+  @PostMapping("/publish-sns")
+  @ResponseBody
+  public String publishToSNS(@RequestParam String message, @RequestParam String topicArn) {
+    try {
+      AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClientBuilder.standard()
+              .withRegion("eu-central-1")
+              .build();
+
+      // Get role ARN from environment variable for security
+      String roleArn = System.getenv("ASSUME_ROLE_ARN");
+      String roleSessionName = "SNSPublishSession";
+
+      // Create assume role request
+      AssumeRoleRequest assumeRoleRequest = new AssumeRoleRequest()
+              .withRoleArn(roleArn)
+              .withRoleSessionName(roleSessionName)
+              .withDurationSeconds(3600); // 1 hour
+
+      // Assume the role and get temporary credentials
+      AssumeRoleResult assumeRoleResult = stsClient.assumeRole(assumeRoleRequest);
+      Credentials tempCredentials = assumeRoleResult.getCredentials();
+
+
+      // Create SNS client v1 with temporary credentials
+      AmazonSNS snsClient = AmazonSNSClientBuilder.standard()
+              .withCredentials(new AWSStaticCredentialsProvider(new BasicSessionCredentials(
+                      tempCredentials.getAccessKeyId(),
+                      tempCredentials.getSecretAccessKey(),
+                      tempCredentials.getSessionToken())))
+              .withRegion("eu-central-1")
+              .build();
+
+      PublishRequest publishRequest = new PublishRequest(topicArn, message);
+      PublishResult result = snsClient.publish(publishRequest);
+
+      logger.info("Message published to SNS. Topic ARN: " + topicArn);
+      logger.info("Message ID: " + result.getMessageId());
+
+      return getXrayTraceId();
+    } catch (Exception e) {
+      logger.error("Error publishing to SNS: {}", e.getMessage());
+      throw new RuntimeException(e);
+    }
   }
 
   @GetMapping("/get-sqs")
