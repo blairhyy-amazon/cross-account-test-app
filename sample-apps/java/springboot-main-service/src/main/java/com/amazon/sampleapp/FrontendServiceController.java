@@ -122,35 +122,45 @@ public class FrontendServiceController {
   @ResponseBody
   public String publishToSNS(@RequestParam String message, @RequestParam String topicArn) {
     try {
+      logger.info("new......");
+
+      // Build STS client in specified region
       AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClientBuilder.standard()
               .withRegion("eu-central-1")
               .build();
 
-      // Get role ARN from environment variable for security
+      // Load the role ARN from an environment variable for security
       String roleArn = System.getenv("ASSUME_ROLE_ARN");
       String roleSessionName = "SNSPublishSession";
 
-      // Create assume role request
+      // Create a request to assume the specified role
       AssumeRoleRequest assumeRoleRequest = new AssumeRoleRequest()
               .withRoleArn(roleArn)
               .withRoleSessionName(roleSessionName)
-              .withDurationSeconds(3600); // 1 hour
+              .withDurationSeconds(3600); // 1 hour session
 
-      // Assume the role and get temporary credentials
+      // Assume the role and retrieve temporary session credentials
       AssumeRoleResult assumeRoleResult = stsClient.assumeRole(assumeRoleRequest);
       Credentials tempCredentials = assumeRoleResult.getCredentials();
 
+      // Wrap credentials in BasicSessionCredentials
+      BasicSessionCredentials sessionCredentials = new BasicSessionCredentials(
+              tempCredentials.getAccessKeyId(),
+              tempCredentials.getSecretAccessKey(),
+              tempCredentials.getSessionToken()
+      );
 
-      // Create SNS client v1 with temporary credentials
+      // Create SNS client using the temporary credentials from AssumeRole
       AmazonSNS snsClient = AmazonSNSClientBuilder.standard()
-              .withCredentials(new AWSStaticCredentialsProvider(new BasicSessionCredentials(
-                      tempCredentials.getAccessKeyId(),
-                      tempCredentials.getSecretAccessKey(),
-                      tempCredentials.getSessionToken())))
+              .withCredentials(new AWSStaticCredentialsProvider(sessionCredentials))
               .withRegion("eu-central-1")
               .build();
 
-      PublishRequest publishRequest = new PublishRequest(topicArn, message);
+      // Prepare and publish the message using the SNS client
+      PublishRequest publishRequest = new PublishRequest()
+              .withTopicArn(topicArn)
+              .withMessage(message);
+
       PublishResult result = snsClient.publish(publishRequest);
 
       logger.info("Message published to SNS. Topic ARN: " + topicArn);
