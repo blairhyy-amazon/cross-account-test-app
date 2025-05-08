@@ -15,6 +15,8 @@
 
 package com.amazon.sampleapp;
 
+import com.amazonaws.services.kinesis.AmazonKinesis;
+import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.springframework.boot.SpringApplication;
@@ -70,10 +72,17 @@ public class FrontendService {
     return SnsClient.builder().build();
   }
 
+//  @Bean
+//  public KinesisClient kinesisClient() {
+//    // v2
+//    return KinesisClient.builder().build();
+//  }
+
+
   @Bean
-  public KinesisClient kinesisClient() {
-    // v2
-    return KinesisClient.builder().build();
+  public AmazonKinesis kinesisClient() {
+    // v1
+    return AmazonKinesisClientBuilder.standard().build();
   }
 
   @Bean

@@ -15,6 +15,10 @@
 
 package com.amazon.sampleapp;
 
+import com.amazonaws.services.lambda.AWSLambda;
+import com.amazonaws.services.lambda.AWSLambdaClientBuilder;
+import com.amazonaws.services.lambda.model.GetFunctionRequest;
+import com.amazonaws.services.lambda.model.GetFunctionResult;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -46,7 +50,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -54,37 +57,45 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import com.amazonaws.services.sns.AmazonSNS;
-//import com.amazonaws.regions.Regions;
-//import com.amazonaws.auth.BasicSessionCredentials;
-//import com.amazonaws.auth.AWSStaticCredentialsProvider;
-//import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
-//import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.auth.BasicSessionCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.services.kinesis.AmazonKinesis;
+import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
+import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 //import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 //import com.amazonaws.services.sns.model.PublishRequest;
-//import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
-//import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
-//import com.amazonaws.services.securitytoken.model.Credentials;
+import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
+import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.amazonaws.services.securitytoken.model.Credentials;
 //import com.amazonaws.services.sns.model.PublishResult;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
-import software.amazon.awssdk.services.kinesis.KinesisClient;
-import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
-import software.amazon.awssdk.services.kinesis.model.CreateStreamResponse;
-import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
-import software.amazon.awssdk.services.kinesis.model.DescribeStreamResponse;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
+import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
+import com.amazonaws.services.dynamodbv2.model.TableDescription;
+//import software.amazon.awssdk.services.kinesis.KinesisClient;
+//import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
+//import software.amazon.awssdk.services.kinesis.model.CreateStreamResponse;
+//import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
+//import software.amazon.awssdk.services.kinesis.model.DescribeStreamResponse;
+//import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+//import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
+//import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 import software.amazon.awssdk.services.sns.model.PublishResponse;
-import software.amazon.awssdk.services.sts.StsClient;
-import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
-import software.amazon.awssdk.services.sts.model.AssumeRoleResponse;
-import software.amazon.awssdk.services.sts.model.Credentials;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+//import software.amazon.awssdk.services.sts.StsClient;
+//import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
+//import software.amazon.awssdk.services.sts.model.AssumeRoleResponse;
+//import software.amazon.awssdk.services.sts.model.Credentials;
+//import software.amazon.awssdk.regions.Region;
+//import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
+//import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 
 @Controller
 public class FrontendServiceController {
@@ -95,8 +106,11 @@ public class FrontendServiceController {
 //  private final AmazonSNS amazonSNS;
   private final SnsClient snsClient;
   private final SqsClient sqsClient;
-  private final KinesisClient kinesisClient;
-  private final DynamoDbClient dynamoDbClient;
+  private final AmazonKinesis kinesisClient;
+//  private final KinesisClient kinesisClient;
+//  private final DynamoDbClient dynamoDbClient;
+//  private final AmazonDynamoDB dynamoDbClient;
+
   private AtomicBoolean shouldSendLocalRootClientCall = new AtomicBoolean(false);
 
   @Bean
@@ -124,14 +138,14 @@ public class FrontendServiceController {
   }
 
   @Autowired
-  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3, AmazonSQS amazonSQS, SqsClient sqsClient, SnsClient snsClient, KinesisClient kinesisClient, DynamoDbClient dynamoDbClient) {
+  public FrontendServiceController(CloseableHttpClient httpClient, S3Client s3, AmazonSQS amazonSQS, SqsClient sqsClient, SnsClient snsClient, AmazonKinesis kinesisClient) {
     this.httpClient = httpClient;
     this.s3 = s3;
     this.amazonSQS = amazonSQS;
     this.sqsClient = sqsClient;
     this.snsClient = snsClient;
     this.kinesisClient = kinesisClient;
-    this.dynamoDbClient = dynamoDbClient;
+//    this.dynamoDbClient = dynamoDbClient;
   }
 
   @GetMapping("/")
@@ -196,55 +210,55 @@ public class FrontendServiceController {
 //    }
 //  }
 
-  @PostMapping("/publish-sns-v2")
-  @ResponseBody
-  public String publishToSNSv2(@RequestParam String message, @RequestParam String topicArn) {
-    try {
-      Region region = Region.EU_CENTRAL_1;
-
-      // Build STS client
-      StsClient stsClient = StsClient.builder()
-              .region(region)
-              .build();
-
-      String roleArn = System.getenv("ASSUME_ROLE_ARN");
-      String roleSessionName = "SNSPublishSession";
-
-      AssumeRoleRequest assumeRoleRequest = AssumeRoleRequest.builder()
-              .roleArn(roleArn)
-              .roleSessionName(roleSessionName)
-              .durationSeconds(3600)
-              .build();
-
-      AssumeRoleResponse assumeRoleResponse = stsClient.assumeRole(assumeRoleRequest);
-      Credentials tempCredentials = assumeRoleResponse.credentials();
-
-      AwsSessionCredentials awsSessionCredentials = AwsSessionCredentials.create(
-              tempCredentials.accessKeyId(),
-              tempCredentials.secretAccessKey(),
-              tempCredentials.sessionToken()
-      );
-
-      SnsClient snsClient = SnsClient.builder()
-              .credentialsProvider(StaticCredentialsProvider.create(awsSessionCredentials))
-              .region(region)
-              .build();
-
-      PublishRequest publishRequest = PublishRequest.builder()
-              .topicArn(topicArn)
-              .message(message)
-              .build();
-
-      PublishResponse result = snsClient.publish(publishRequest);
-
-      logger.info("Message published to SNS. Topic ARN: " + topicArn);
-
-      return getXrayTraceId();
-    } catch (Exception e) {
-      logger.error("Error publishing to SNS: {}", e.getMessage());
-      throw new RuntimeException(e);
-    }
-  }
+//  @PostMapping("/publish-sns-v2")
+//  @ResponseBody
+//  public String publishToSNSv2(@RequestParam String message, @RequestParam String topicArn) {
+//    try {
+//      Region region = Region.EU_CENTRAL_1;
+//
+//      // Build STS client
+//      StsClient stsClient = StsClient.builder()
+//              .region(region)
+//              .build();
+//
+//      String roleArn = System.getenv("ASSUME_ROLE_ARN");
+//      String roleSessionName = "SNSPublishSession";
+//
+//      AssumeRoleRequest assumeRoleRequest = AssumeRoleRequest.builder()
+//              .roleArn(roleArn)
+//              .roleSessionName(roleSessionName)
+//              .durationSeconds(3600)
+//              .build();
+//
+//      AssumeRoleResponse assumeRoleResponse = stsClient.assumeRole(assumeRoleRequest);
+//      Credentials tempCredentials = assumeRoleResponse.credentials();
+//
+//      AwsSessionCredentials awsSessionCredentials = AwsSessionCredentials.create(
+//              tempCredentials.accessKeyId(),
+//              tempCredentials.secretAccessKey(),
+//              tempCredentials.sessionToken()
+//      );
+//
+//      SnsClient snsClient = SnsClient.builder()
+//              .credentialsProvider(StaticCredentialsProvider.create(awsSessionCredentials))
+//              .region(region)
+//              .build();
+//
+//      PublishRequest publishRequest = PublishRequest.builder()
+//              .topicArn(topicArn)
+//              .message(message)
+//              .build();
+//
+//      PublishResponse result = snsClient.publish(publishRequest);
+//
+//      logger.info("Message published to SNS. Topic ARN: " + topicArn);
+//
+//      return getXrayTraceId();
+//    } catch (Exception e) {
+//      logger.error("Error publishing to SNS: {}", e.getMessage());
+//      throw new RuntimeException(e);
+//    }
+//  }
 
   @GetMapping("/get-sqs")
   @ResponseBody
@@ -293,52 +307,138 @@ public class FrontendServiceController {
     return getXrayTraceId();
   }
 
-  @PostMapping("/create-stream")
-  @ResponseBody
-  public String createStream(String streamName, int shardCount) {
-    try {
-      CreateStreamRequest request = CreateStreamRequest.builder()
-              .streamName(streamName)
-              .shardCount(shardCount)
-              .build();
+//  @PostMapping("/create-stream")
+//  @ResponseBody
+//  public String createStream(String streamName, int shardCount) {
+//    try {
+//      CreateStreamRequest request = CreateStreamRequest.builder()
+//              .streamName(streamName)
+//              .shardCount(shardCount)
+//              .build();
+//
+//      CreateStreamResponse response = kinesisClient.createStream(request);
+//      if (response != null) {
+//        logger.info("Create stream done!");
+//      }
+//    } catch (Exception e) {
+//      logger.error("Create stream failed!");
+//    }
+//    return getXrayTraceId();
+//  }
 
-      CreateStreamResponse response = kinesisClient.createStream(request);
-      if (response != null) {
-        logger.info("Create stream done!");
-      }
-    } catch (Exception e) {
-      logger.error("Create stream failed!");
-    }
+  @GetMapping("/get-stream-v1")
+  @ResponseBody
+  public String getStreamArnv1(String streamName, String streamArn) {
+    DescribeStreamRequest request = new DescribeStreamRequest()
+                    .withStreamName(streamName)
+                    .withStreamARN(streamArn);
+
+    DescribeStreamResult response = kinesisClient.describeStream(request);
+
+    return response.getStreamDescription().getStreamARN();
+  }
+
+//  @GetMapping("/get-stream-v2")
+//  @ResponseBody
+//  public String getStreamArnv2(String streamName, String streamArn) {
+//    DescribeStreamRequest request = DescribeStreamRequest.builder()
+//            .streamName(streamName)
+//            .streamARN(streamArn)
+//            .build();
+//
+//    DescribeStreamResponse response = kinesisClient.describeStream(request);
+//
+//    return response.streamDescription().streamARN();
+//  }
+
+  @GetMapping("/get-table-arn-v1")
+  @ResponseBody
+  public String getTableArnv1(String tableName) {
+    String roleArn = System.getenv("ASSUME_ROLE_ARN");
+    String roleSessionName = "SNSPublishSession";
+
+    // Create STS client
+    AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClientBuilder.standard()
+            .withRegion("us-east-2")
+            .build();
+
+    AssumeRoleRequest assumeRoleRequest = new AssumeRoleRequest()
+            .withRoleArn(roleArn)
+            .withRoleSessionName(roleSessionName)
+            .withDurationSeconds(3600);
+
+    AssumeRoleResult assumeRoleResult = stsClient.assumeRole(assumeRoleRequest);
+    Credentials tempCredentials = assumeRoleResult.getCredentials();
+
+    BasicSessionCredentials sessionCredentials = new BasicSessionCredentials(
+            tempCredentials.getAccessKeyId(),
+            tempCredentials.getSecretAccessKey(),
+            tempCredentials.getSessionToken()
+    );
+
+    AmazonDynamoDB dynamoDbClient = AmazonDynamoDBClientBuilder.standard()
+            .withCredentials(new AWSStaticCredentialsProvider(sessionCredentials))
+            .withRegion("us-east-2")
+            .build();
+
+    DescribeTableRequest request = new DescribeTableRequest().withTableName(tableName);
+    DescribeTableResult result = dynamoDbClient.describeTable(request);
+    TableDescription tableDescription = result.getTable();
+    String tableArn = tableDescription.getTableArn();
+    logger.info("Successfully retrieved ARN for table: {} using assumed role", tableArn);
+
     return getXrayTraceId();
   }
 
-  @GetMapping("/get-stream")
-  @ResponseBody
-  public String getStreamArn(String streamName) {
-    DescribeStreamRequest request = DescribeStreamRequest.builder()
-            .streamName(streamName)
-            .streamARN("arn:aws:kinesis:eu-central-1:571600868874:stream/my-test-stream")
-            .build();
-
-    DescribeStreamResponse response = kinesisClient.describeStream(request);
-
-    return response.streamDescription().streamARN();
-  }
-
-  @GetMapping("/get-table-arn")
-  @ResponseBody
-  public String getTableArn(String tableName) {
-    DescribeTableRequest request = DescribeTableRequest.builder()
-            .tableName(tableName)
-            .build();
-
-    DescribeTableResponse response = this.dynamoDbClient.describeTable(request);
-    TableDescription tableDescription = response.table();
-    if (tableDescription != null) {
-      logger.info("Get table done!");
-    }
-    return response.table().tableArn();
-  }
+//  @GetMapping("/get-table-arn-v2")
+//  @ResponseBody
+//  public String getTableArnv2(String tableName) {
+//    Region region = Region.US_EAST_2;
+//
+//    // Create STS client
+//    StsClient stsClient = StsClient.builder()
+//            .region(region)
+//            .build();
+//
+//    String roleArn = System.getenv("ASSUME_ROLE_ARN");
+//    String roleSessionName = "SNSPublishSession";
+//
+//    AssumeRoleRequest assumeRoleRequest = AssumeRoleRequest.builder()
+//            .roleArn(roleArn)
+//            .roleSessionName(roleSessionName)
+//            .durationSeconds(3600)
+//            .build();
+//    AssumeRoleResponse assumeRoleResponse = stsClient.assumeRole(assumeRoleRequest);
+//    Credentials tempCredentials = assumeRoleResponse.credentials();
+//
+//    AwsSessionCredentials awsSessionCredentials = AwsSessionCredentials.create(
+//            tempCredentials.accessKeyId(),
+//            tempCredentials.secretAccessKey(),
+//            tempCredentials.sessionToken()
+//    );
+//
+//    DynamoDbClient crossAccountDynamoDbClient = DynamoDbClient.builder()
+//            .region(region)
+//            .credentialsProvider(StaticCredentialsProvider.create(awsSessionCredentials))
+//            .build();
+//
+//    // Make the DynamoDB call with assumed role
+//    DescribeTableRequest request = DescribeTableRequest.builder()
+//            .tableName(tableName)
+//            .build();
+//
+//    DescribeTableResponse response = crossAccountDynamoDbClient.describeTable(request);
+//    TableDescription tableDescription = response.table();
+//
+//    if (tableDescription != null) {
+//      logger.info("Successfully retrieved ARN for table: {} using assumed role", tableName);
+//      return response.table().tableArn();
+//      // Use the table ARN as needed
+//    } else {
+//      logger.error("Failed to retrieve ARN for table: {}", tableName);
+//      return "Failed to retrieve ARN for table: " + tableName;
+//    }
+//  }
 
   // test aws calls instrumentation
   @GetMapping("/aws-sdk-call")
@@ -416,6 +516,46 @@ public class FrontendServiceController {
     }
     return getXrayTraceId();
   }
+
+  @GetMapping("/get-lambda-arn-v1")
+  @ResponseBody
+  public static String getLambdaArn(String functionName, String region) {
+    // 1. STS client in the caller's account
+    AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClientBuilder.standard()
+            .withRegion("us-east-2")
+            .build();
+
+    String roleArn = System.getenv("ASSUME_ROLE_ARN");
+    String roleSessionName = "LambdaSession";
+
+    // Create a request to assume the specified role
+    AssumeRoleRequest assumeRoleRequest = new AssumeRoleRequest()
+            .withRoleArn(roleArn)
+            .withRoleSessionName(roleSessionName)
+            .withDurationSeconds(3600); // 1 hour session
+
+    // Assume the role and retrieve temporary session credentials
+    AssumeRoleResult assumeRoleResult = stsClient.assumeRole(assumeRoleRequest);
+    Credentials tempCredentials = assumeRoleResult.getCredentials();
+
+    // Wrap credentials in BasicSessionCredentials
+    BasicSessionCredentials sessionCredentials = new BasicSessionCredentials(
+            tempCredentials.getAccessKeyId(),
+            tempCredentials.getSecretAccessKey(),
+            tempCredentials.getSessionToken()
+    );
+
+    AWSLambda lambdaClient = AWSLambdaClientBuilder.standard()
+            .withCredentials(new AWSStaticCredentialsProvider(sessionCredentials))
+            .withRegion("us-east-2")
+            .build();
+
+    // 4. Fetch the Lambda function ARN
+    GetFunctionRequest request = new GetFunctionRequest().withFunctionName(functionName);
+    GetFunctionResult result = lambdaClient.getFunction(request);
+    return result.getConfiguration().getFunctionArn();
+  }
+
 
   // get x-ray trace id
   private String getXrayTraceId() {
