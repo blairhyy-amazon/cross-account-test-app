@@ -25,7 +25,9 @@ buildCache {
 
 
 // End to end tests
-include(":validator")
+//include(":validator")
+include(":sample-apps:java:springboot-main-service")
+include(":sample-apps:java:springboot-remote-service")
 
 //id("com.diffplug.spotless") version "6.22.0"
 //id("com.github.ben-manes.versions") version "0.50.0"

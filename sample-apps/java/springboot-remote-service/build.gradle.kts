@@ -16,7 +16,7 @@
 val javaVersion = if (project.hasProperty("javaVersion")) {
   project.property("javaVersion").toString()
 } else {
-  "11"
+  "21"
 }
 val javaVersionRefactored = JavaVersion.toVersion(javaVersion)
 

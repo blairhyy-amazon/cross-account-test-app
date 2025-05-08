@@ -26,7 +26,9 @@ import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sns.AmazonSNS;
 import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import java.util.Collections;
 
 @SpringBootApplication
@@ -55,12 +57,30 @@ public class FrontendService {
     return SqsClient.builder().build();
   }
 
+//  @Bean
+//  public AmazonSNS amazonSNS() {
+//    //  v1
+//    return AmazonSNSClientBuilder.standard()
+//            .build();
+//  }
+
   @Bean
-  public AmazonSNS amazonSNS() {
-    //  v1
-    return AmazonSNSClientBuilder.standard()
-            .build();
+  public SnsClient snsClient() {
+    // v2
+    return SnsClient.builder().build();
   }
+
+  @Bean
+  public KinesisClient kinesisClient() {
+    // v2
+    return KinesisClient.builder().build();
+  }
+
+  @Bean
+  public DynamoDbClient DynamoDB() {
+    return DynamoDbClient.builder().build();
+  }
+
 
   public static void main(String[] args) {
     SpringApplication app = new SpringApplication(FrontendService.class);
